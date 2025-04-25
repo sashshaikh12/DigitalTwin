@@ -2,7 +2,6 @@
 
 An interactive 3D simulation of an air conditioning system that visualizes airflow patterns and temperature changes based on real-world data. This digital twin uses Three.js for 3D rendering and particle simulation to visualize how air conditioning affects room temperature.
 
-![AC Digital Twin](https://placeholder-for-screenshot.com/ac-digital-twin-screenshot.jpg)
 
 ## Features
 
@@ -15,7 +14,7 @@ An interactive 3D simulation of an air conditioning system that visualizes airfl
 
 ## Live Demo
 
-Visit the live demo: [AC Digital Twin on Vercel](https://ac-digital-twin.vercel.app/)
+Visit the live demo: [AC Digital Twin on Vercel](https://digital-twin-blush.vercel.app/)
 
 ## Technical Overview
 
@@ -105,17 +104,6 @@ vercel --prod
 - Loading screen to enhance user experience during initialization
 - Error handling for graceful degradation
 
-## Browser Support
-
-Tested and working in:
-- Chrome 90+
-- Firefox 88+
-- Edge 90+
-- Safari 14+
-
-## License
-
-[Include appropriate license here]
 
 ## Acknowledgements
 
