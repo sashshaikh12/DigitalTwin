@@ -15,6 +15,9 @@ let lastUpdateTime = 0;
 const UPDATE_INTERVAL = 5000; // 5 seconds in milliseconds
 let acUnit, windowMesh; // Add these variables to store references to the meshes
 let windowCenter, windowSize; // Add these as global variables
+// Track loading status
+let modelLoaded = false;
+let dataLoaded = false;
 
 // Initialize the scene
 function init() {
@@ -48,34 +51,65 @@ function init() {
     // Load the room model
     const loader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
+    // Use CDN for Vercel deployment
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
     loader.setDRACOLoader(dracoLoader);
 
-    loader.load('room_ac_model.compressed.glb', (gltf) => {
-        scene.add(gltf.scene);
-        gltf.scene.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-                
-                // Store references to AC unit and window
-                if (child.name.startsWith('AC_')) {
-                    acUnit = child;
+    loader.load(
+        'room_ac_model.compressed.glb', 
+        (gltf) => {
+            scene.add(gltf.scene);
+            gltf.scene.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    
+                    // Store references to AC unit and window
+                    if (child.name.startsWith('AC_')) {
+                        acUnit = child;
+                    }
+                    if (child.name === 'Window') {
+                        windowMesh = child;
+                    }
+                    if (child.name === 'Room') {
+                        // Make room walls transparent
+                        child.material.side = THREE.DoubleSide;
+                        child.material.transparent = true;
+                        child.material.opacity = 0.2;
+                        child.material.depthWrite = false; // Ensures proper transparency
+                    }
                 }
-                if (child.name === 'Window') {
-                    windowMesh = child;
-                }
-                if (child.name === 'Room') {
-                    // Make room walls transparent
-                    child.material.side = THREE.DoubleSide;
-                    child.material.transparent = true;
-                    child.material.opacity = 0.2;
-                    child.material.depthWrite = false; // Ensures proper transparency
-                }
-            }
-        });
-        initParticleSystems();
-    });
+            });
+            initParticleSystems();
+            console.log('Model loaded successfully!');
+            modelLoaded = true;
+            checkAllLoaded();
+        },
+        // Progress callback
+        (xhr) => {
+            const progressPercent = Math.round((xhr.loaded / xhr.total) * 100);
+            document.getElementById('loading-progress').textContent = `${progressPercent}%`;
+            console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+        },
+        // Error callback
+        (error) => {
+            console.error('Error loading model:', error);
+            // Display error message and hide loader
+            document.getElementById('loading-screen').classList.add('fade-out');
+            // Display error message to user
+            const errorDiv = document.createElement('div');
+            errorDiv.style.position = 'absolute';
+            errorDiv.style.top = '50%';
+            errorDiv.style.left = '50%';
+            errorDiv.style.transform = 'translate(-50%, -50%)';
+            errorDiv.style.background = 'rgba(0,0,0,0.7)';
+            errorDiv.style.color = 'white';
+            errorDiv.style.padding = '20px';
+            errorDiv.style.borderRadius = '10px';
+            errorDiv.innerHTML = '<h3>Error loading 3D model</h3><p>Please try refreshing the page.</p>';
+            document.body.appendChild(errorDiv);
+        }
+    );
 
     // Load simulation data
     loadSimulationData();
@@ -197,16 +231,67 @@ function initParticleSystems() {
 
 function loadSimulationData() {
     fetch('ac_input_dynamic_balanced.csv')
-        .then(response => response.text())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Failed to load CSV: ${response.status} ${response.statusText}`);
+            }
+            return response.text();
+        })
         .then(csvText => {
             Papa.parse(csvText, {
                 header: true,
                 complete: (results) => {
-                    simulationData = results.data;
+                    if (results.data && results.data.length > 0) {
+                        console.log(`Successfully loaded ${results.data.length} simulation data rows`);
+                        simulationData = results.data.filter(row => 
+                            // Filter out empty rows or rows without required data
+                            row.Time && (row['AC State'] !== undefined || row['Window State'] !== undefined)
+                        );
+                        updateSimulationDisplay(simulationData[0]);
+                        dataLoaded = true;
+                        checkAllLoaded();
+                    } else {
+                        console.error("CSV parsing completed but no valid data found");
+                        // Use fallback data
+                        simulationData = [
+                            { Time: "00:00", "AC State": "1", "Window State": "0", "AC Temperature (°C)": "24", "room temperature": "28" }
+                        ];
+                        updateSimulationDisplay(simulationData[0]);
+                        dataLoaded = true;
+                        checkAllLoaded();
+                    }
+                },
+                error: (error) => {
+                    console.error("CSV parsing error:", error);
+                    // Use fallback data
+                    simulationData = [
+                        { Time: "00:00", "AC State": "1", "Window State": "0", "AC Temperature (°C)": "24", "room temperature": "28" }
+                    ];
                     updateSimulationDisplay(simulationData[0]);
+                    dataLoaded = true;
+                    checkAllLoaded();
                 }
             });
+        })
+        .catch(error => {
+            console.error("Error loading simulation data:", error);
+            // Fallback to sample data if loading fails
+            simulationData = [
+                { Time: "00:00", "AC State": "1", "Window State": "0", "AC Temperature (°C)": "24", "room temperature": "28" }
+            ];
+            updateSimulationDisplay(simulationData[0]);
+            dataLoaded = true;
+            checkAllLoaded();
         });
+}
+
+// New function to check if all resources are loaded
+function checkAllLoaded() {
+    if (modelLoaded && dataLoaded) {
+        setTimeout(() => {
+            document.getElementById('loading-screen').classList.add('fade-out');
+        }, 500);
+    }
 }
 
 function updateParticles() {
